@@ -304,5 +304,5 @@ void loop() {
   digitalWrite(connectionLED, LOW);
   unsigned long timeoutTime = (60 - minute(unixtime)) * 60000;
   Serial.println("All done! Disconnecting and sleeping until the next hour. 'Till then!");
-  delay(timeoutTime);
+  delay(timeoutTime + 10000);
 }
