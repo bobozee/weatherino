@@ -84,7 +84,7 @@ void rgbBlink (boolean red, boolean green, boolean blue, int duration) {
 
 void download(String address, String name, int tryCount = 0) {
 
-  if (tryCount == 3) {
+  if (tryCount > 2) {
     errorHandler("[HTTP] Max try count exceeded. I am giving up!");
     return;
   }
@@ -106,7 +106,7 @@ void download(String address, String name, int tryCount = 0) {
       digitalWrite(errorLED, LOW);
     }
     http.end();
-    if (!payloadData.isNull()) {
+    if (!payloadData.length() == 0) {
       responseData = payloadData;
       return;
     }
