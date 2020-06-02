@@ -45,12 +45,9 @@ void setup() {
   pinMode(signalR, OUTPUT);
   pinMode(signalG, OUTPUT);
   pinMode(signalB, OUTPUT);
-  Serial.println();
-  Serial.println();
-  Serial.println("~~~~~~~~~~~~~~~~~");
+  Serial.println("\n\n~~~~~~~~~~~~~~~~~");
   Serial.println("Startup complete.");
-  Serial.println("~~~~~~~~~~~~~~~~~");
-  Serial.println();
+  Serial.println("~~~~~~~~~~~~~~~~~\n");
   digitalWrite(powerLED, HIGH);
 }
 
@@ -64,7 +61,7 @@ void errorHandler(String error) {
   Serial.println(error);
   Serial.println("An Error has occured. This Task will be terminated. Restart in 10 minutes; Press the 'Reset' button to restart the Program instantly.");
   digitalWrite(errorLED, HIGH);
-  delay(600000);
+  delay(1000 * 60 * 10);
   digitalWrite(errorLED, LOW);
   ESP.reset();
 }
@@ -85,73 +82,39 @@ void rgbBlink (boolean red, boolean green, boolean blue, int duration) {
   digitalWrite(signalB, LOW);
 }
 
-void download(String address, String name) {
+void download(String address, String name, int tryCount = 0) {
+
+  if (tryCount == 3) {
+    errorHandler("[HTTP] Max try count exceeded. I am giving up!");
+    return;
+  }
+
   Serial.print("Contacting ");
   Serial.print(name);
   Serial.print("....");
-  escape = false;
-  failcount = 0;
-  timecount = 0;
-  boolean auxescape;
-  while (escape == false) {
-    auxescape = false;
-    failcount++;
-    boolean result = http.begin(client, address);
-    while (!auxescape && !result) {
-      delay(1000);
-      timecount++;
-      if (timecount >= 5) {
-        Serial.println("Contacting Timeout");
-        digitalWrite(errorLED, HIGH);
-        delay(500);
-        digitalWrite(errorLED, LOW);
-        timecount = 0;
-        auxescape = true;
-      }
-    }    
-    if (failcount == 3) {
-      errorHandler("Failed to contact website");
-    }
-    if (auxescape == false) {
+
+  if( http.begin(client, address) ) {
+    int httpCode = http.GET();
+    String payloadData;
+    if (httpCode >= 200 && httpCode <= 400) {
+      payloadData = http.getString();
       Serial.println("Done!");
-      escape = true;
-    }
-  }
-  escape = false;
-  failcount = 0;
-  Serial.print("Downloading Data....");
-  while (escape == false) {
-    failcount++;
-    int responseCode = http.GET();
-    while (responseCode == 0) {
-      delay(1000);
-      timecount++;
-      if (timecount >= threshold) {
-        Serial.println("Download Timeout");
-        digitalWrite(errorLED, HIGH);
-        delay(500);
-        digitalWrite(errorLED, LOW);
-        timecount = 0;
-        responseCode = 1000;
-      }
-    }
-    if (responseCode >= 200 && responseCode < 400) {
-      responseData = http.getString();
-      Serial.println("Done!");
-      failcount = 0;
-      escape = true;
     } else {
-      if (responseCode != 1000) {
-        Serial.println("Bad Response");
-        digitalWrite(errorLED, HIGH);
-        delay(500);
-        digitalWrite(errorLED, LOW);
-      }
+      Serial.printf("[HTTP] GET... failed, error: %s", http.errorToString(httpCode).c_str());
+      digitalWrite(errorLED, HIGH);
+      delay(500);
+      digitalWrite(errorLED, LOW);
     }
-    responseCode = 0;
-    if (failcount == 3) {
-      errorHandler("Failed to download data");
+    http.end();
+    if (!payloadData.isNull()) {
+      responseData = payloadData;
+      return;
     }
+    // wait one second and try again
+    delay(1000);
+    download(address, name, ++tryCount);
+  } else {
+    errorHandler("[HTTP] GET...Unable to connect");
   }
 }
 
@@ -172,8 +135,7 @@ void loop() {
     }
   }
   digitalWrite(connectionLED, HIGH);
-  Serial.println("Connected!");
-  Serial.println();
+  Serial.println("Connected!\n");
 
   download("http://api.openweathermap.org/data/2.5/weather?lat=51.6&lon=6.92&appid=a02aeb3716cc0681332cb38fe5625bab", "Weather Website");
 
@@ -227,7 +189,7 @@ void loop() {
   }
   Serial.println("Done!");
   Serial.println();
-  
+
   download("http://api.openweathermap.org/data/2.5/forecast?q=Kirchhellen,de&appid=a02aeb3716cc0681332cb38fe5625bab", "Forecast Website");
 
   Serial.print("Processing Data....");
@@ -262,7 +224,7 @@ void loop() {
   }
   Serial.println("Done!");
   Serial.println();
-  
+
   int duration = 1000;
   //red = time, blue = weather, green = wind, white = forecast
   if (goodTime) {
