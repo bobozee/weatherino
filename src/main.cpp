@@ -106,7 +106,7 @@ void download(String address, String name, int tryCount = 0) {
       digitalWrite(errorLED, LOW);
     }
     http.end();
-    if (!payloadData.length() == 0) {
+    if (payloadData.length() > 0) {
       responseData = payloadData;
       return;
     }
