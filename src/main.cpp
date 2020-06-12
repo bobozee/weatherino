@@ -25,7 +25,7 @@ DynamicJsonDocument weatherDoc(15360);
 JsonArray reports;
 StaticJsonDocument<1024> filter;
 int failcount = 0;
-int forecastrange = 2; // amount of hours to be forecasted, max = 48, 0 means last hour
+int forecastrange = 2; // amount of hours to be forecasted, max = 48, 0 means last hour (unimportant)
 
 void setup() {
   Serial.begin(115200);
