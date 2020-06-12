@@ -3,6 +3,7 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
 #include <TimeLib.h>
+#include <list>
 
 const char* ssid = "ErpixLAN";
 const char* password = "***REMOVED***";
@@ -24,6 +25,7 @@ DynamicJsonDocument weatherDoc(15360);
 JsonArray reports;
 StaticJsonDocument<1024> filter;
 int failcount = 0;
+int forecastrange = 2; // amount of hours to be forecasted, max = 48, 0 means last hour
 
 void setup() {
   Serial.begin(115200);
@@ -35,7 +37,11 @@ void setup() {
   pinMode(signalR, OUTPUT);
   pinMode(signalG, OUTPUT);
   pinMode(signalB, OUTPUT);
-  Serial.println("~~~~~~~~~~~~~~~~~");
+  filter["current"]["dt"] = true;
+  filter["current"]["wind_speed"] = true;
+  filter["current"]["weather"] = true;
+  filter["hourly"][0]["weather"] = true;
+  Serial.println();
   Serial.println("Startup complete.");
   Serial.println("~~~~~~~~~~~~~~~~~");
   digitalWrite(powerLED, HIGH);
@@ -94,74 +100,77 @@ void loop() {
   }
   digitalWrite(connectionLED, HIGH);
   Serial.println("Connected!");
-  Serial.println();
   
   int trycount = 0;
-  while (true) {
+  boolean esc = false;
+  while (!esc) {
     if (trycount == 3) {
       errorHandler("Failed to establish connection to website.");
     }
     Serial.print("Contacting Weather Website.... ");
-    http.begin(client, "https://api.openweathermap.org/data/2.5/onecall?lat=51.603170&lon=6.917150&exclude=minutely,daily&appid=a02aeb3716cc0681332cb38fe5625bab");
-    int httpCode = http.GET(); // fetch the GET code of the HTTP request
-    if (httpCode >= 200 && httpCode <= 400) {
+    http.begin(client, "http://api.openweathermap.org/data/2.5/onecall?lat=51.603170&lon=6.917150&exclude=minutely,daily&appid=a02aeb3716cc0681332cb38fe5625bab");
+    int httpCode = http.GET(); // fetch the GET code of the HTTP request, INFO: http.GET() is synchronous
+    if (httpCode >= 200 && httpCode < 400) {
       responseData = http.getString(); // if the code is good, get the fetchable data
       Serial.println("Done!");
-      Serial.println();
-      return; // escape from the fail-repeating loop with requested information
+      esc = true; // escape from the fail-repeating loop with requested information
     } else {
       Serial.print(httpCode);
       Serial.print(", ");
       Serial.println(http.errorToString(httpCode).c_str());
-      Serial.println();
       digitalWrite(errorLED, HIGH);
       delay(500);
       digitalWrite(errorLED, LOW);
       trycount++;
     }
     http.end();
-    delay(1000);
   }
   
   Serial.print("Processing Data....");
-  filter["current"]["dt"] = true;
-  filter["current"]["wind_speed"] = true;
-  filter["current"]["weather"]["0"]["id"] = true;
-  int forecastrange = 2; // amount of hours to be forecasted, max = 48, 0 means last hour
-  for (int i = 0; i < forecastrange; i++) {
-    filter["hourly"][i]["weather"]["id"] = true;
-  }
   DeserializationError error = deserializeJson(weatherDoc, responseData, DeserializationOption::Filter(filter));
   if (error) {
     String errorMsg("Parsing Error: ");
     errorMsg.concat(error.c_str());
     errorHandler(errorMsg);
   }
-  float wind = weatherDoc["wind"]["speed"];
-  unsigned long unixtime = weatherDoc["dt"];
+  float wind = weatherDoc["current"]["wind_speed"];
+  unsigned long unixtime = weatherDoc["current"]["dt"];
   int timeM = month(unixtime);
-  int timeH = hour(unixtime) + 2;
+  int timeH = hour(unixtime) + 2; // translate UTC to German time (+2 hours)
   int uppermax = 0;
   switch (timeM) { // dynamically change shutdown hour depending on month
-    case 4: uppermax = 19.5; break;
+    case 4: uppermax = 20; break;
     case 5: uppermax = 20; break;
-    case 6: uppermax = 20.5; break;
+    case 6: uppermax = 21; break;
     case 7: uppermax = 21; break;
     case 8: uppermax = 21; break;
     case 9: uppermax = 20; break;
-    case 10: uppermax = 19.5; break;
+    case 10: uppermax = 20; break;
   }
-  int weather = weatherDoc["current"]["weather"]["0"]["id"];
-  int weatherids[forecastrange];
-  for (int i = 1; i < 2; i++) { // INFO: the loop starts with 1 due to hour 0 being the latest hour, which is not important in a forecast
-    weatherids[i - 1] = weatherDoc["hourly"][i]["weather"][0]["id"]; // save the hourly weather ids in an int array
+  JsonArray currweather = weatherDoc["current"]["weather"].as<JsonArray>(); // get the current weather states as an array
+  int currweatherids[currweather.size()];
+  int index = 0;
+  for(JsonVariant obj : currweather) {
+    currweatherids[index] = obj["id"].as<int>(); // save states' id in array
+    index++;
+  }
+  JsonArray foreweather = weatherDoc["hourly"].as<JsonArray>(); // get the hourly combined weather reports as an array
+  std::list<int> foreweatherids; // INFO: it's better to use a list here since at this scope it's impossible to gain the length of the combined foreweatherstates length for array declaration
+  for (int i = 1; i <= forecastrange; i++) { // INFO: the loop starts with 1 due to hour 0 being the latest hour, which is not important in a forecast
+    JsonArray foreweatherstates = foreweather[i]["weather"].as<JsonArray>(); // get the weather states of the hour as an array
+    for(JsonVariant obj : foreweatherstates) { 
+      foreweatherids.push_back(obj["id"].as<int>()); // save hourly states' id in list
+    }
   }
   boolean goodTime = false;
   boolean goodWeather = false;
   boolean goodWind = false;
   boolean goodEstimate = false;
-  if (weather >= 800) {
-    goodWeather = true;
+  goodWeather = true;
+  for (int id : currweatherids) {
+    if (id <= 800) {
+      goodWeather = false;
+    }
   }
   if (timeM >= 4 && timeM <= 10 && timeH >= 8 && timeH < uppermax) {
     goodTime = true;
@@ -170,40 +179,62 @@ void loop() {
     goodWind = true;
   }
   goodEstimate = true;
-  for (int id : weatherids) {
-    if (id < 800) {
+  for (int id : foreweatherids) {
+    if (id <= 800) {
       goodEstimate = false;
     }
   }
   Serial.println("Done!");
-  Serial.println();
   
   int signalduration = 1000; // amount of milliseconds for the signal led
-  //red = time, blue = weather, green = wind, white = forecast
+  // INFO: there are seperate if's in order to have the ability to write "Done!" before expressing info
+  // red = time, blue = weather, green = wind, white = forecast
   if (goodTime) {
-    Serial.println("Time is optimal.");
+    Serial.print("Time is optimal.");
   } else {
-    Serial.println("Time isn't optimal.");
+    Serial.print("Time isn't optimal. ");
     rgbBlink(true, false, false, signalduration);
   }
+  Serial.print(" (Hour: ");
+  Serial.print(timeH);
+  Serial.print(" , Month: ");
+  Serial.print(timeM);
+  Serial.println(")");
+  
   if (goodWind) {
-    Serial.println("Wind is optimal.");
+    Serial.print("Wind is optimal.");
   } else {
-    Serial.println("Wind isn't optimal.");
+    Serial.print("Wind isn't optimal.");
     rgbBlink(true, true, false, signalduration);
   }
+  Serial.print(" (Speed: ");
+  Serial.print(wind);
+  Serial.println(")");
+
   if (goodWeather) {
-    Serial.println("Weather is optimal.");
+    Serial.print("Weather is optimal.");
   } else {
-    Serial.println("Weather isn't optimal.");
+    Serial.print("Weather isn't optimal.");
     rgbBlink(false, false, true, signalduration);
   }
+  Serial.print(" (Id's:");
+  for (int id : currweatherids) {
+    Serial.print(" ");
+    Serial.print(id);
+  }
+  Serial.println(")");
   if (goodEstimate) {
-    Serial.println("Forecast is optimal.");
+    Serial.print("Forecast is optimal.");
   } else {
-    Serial.println("Forecast isn't optimal.");
+    Serial.print("Forecast isn't optimal.");
     rgbBlink(true, true, true, signalduration);
   }
+  Serial.print(" (Id's:");
+  for (int id : foreweatherids) {
+    Serial.print(" ");
+    Serial.print(id);
+  }
+  Serial.println(")");
   if (goodTime && goodWeather && goodEstimate && goodWind) {
     Serial.println("Outcome: Environment fits requirements. Pump is on.");
     digitalWrite(waterLED, HIGH);
