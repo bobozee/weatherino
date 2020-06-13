@@ -78,6 +78,9 @@ void rgbBlink (boolean red, boolean green, boolean blue, int duration) {
   digitalWrite(signalB, LOW);
 }
 
+/**
+ * Calculates local hour for WEST (Western europen time zone)
+ * */
 int localHourTime(unsigned long unixtime) {
   int _month = month(unixtime);
   int _hour = hour(unixtime);
@@ -95,9 +98,9 @@ int localHourTime(unsigned long unixtime) {
     time.Minute = 0;
     time.Second = 0;
     time_t firstOfApril = makeTime(time);
-    time_t _previousSundy = previousSunday(firstOfApril) + 60 * 60; // last sunday in march at 01 o'clock
+    time_t _previousSunday = previousSunday(firstOfApril) + 60 * 60; // last sunday in march at 01 o'clock
 
-    if (unixtime >= _previousSundy) {
+    if (unixtime >= _previousSunday) {
       //  ok, the last sunday in march , 01 o'clock has passed
       time.Month = 11;  // November
       time.Day = 1;
