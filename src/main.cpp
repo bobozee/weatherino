@@ -173,7 +173,7 @@ void loop() {
   float wind = weatherDoc["current"]["wind_speed"];
   unsigned long unixtime = weatherDoc["current"]["dt"];
   int timeM = month(unixtime);
-  int timeH = hour(unixtime) + localHourTime(unixtime); // translate UTC to German time (+2 hours)
+  int timeH = localHourTime(unixtime); // local hour in germany preserving daily savings time
   int uppermax = 0;
   switch (timeM) { // dynamically change shutdown hour depending on month
     case 4: uppermax = 20; break;
