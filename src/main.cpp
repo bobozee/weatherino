@@ -84,8 +84,6 @@ void rgbBlink (boolean red, boolean green, boolean blue, int duration) {
 int localHourTime(unsigned long unixtime) {
   int _month = month(unixtime);
   int _hour = hour(unixtime);
-  int _weekday = weekday(unixtime);
-  int _day = day(unixtime);
   if (_month >= 3 && _month <= 10) {
     // most likely it is daily savings time, let's check the details
 
