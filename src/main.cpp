@@ -78,6 +78,40 @@ void rgbBlink (boolean red, boolean green, boolean blue, int duration) {
   digitalWrite(signalB, LOW);
 }
 
+int localHourTime(unsigned long unixtime) {
+  int _month = month(unixtime);
+  int _hour = hour(unixtime);
+  int _weekday = weekday(unixtime);
+  int _day = day(unixtime);
+  if (_month >= 3 && _month <= 10) {
+    // most likely it is daily savings time, let's check the details
+
+    // make a time as 1 of April, this year
+    tmElements_t time;
+    time.Month = 4; // april
+    time.Day = 1;
+    time.Year = year(unixtime);
+    time.Hour = 0;
+    time.Minute = 0;
+    time.Second = 0;
+    time_t firstOfApril = makeTime(time);
+    time_t _previousSundy = previousSunday(firstOfApril) + 60 * 60; // last sunday in march at 01 o'clock
+
+    if (unixtime >= _previousSundy) {
+      //  ok, the last sunday in march , 01 o'clock has passed
+      time.Month = 11;  // November
+      time.Day = 1;
+      time_t firstOfNovember = makeTime(time);
+      time_t _previousSunday = previousSunday(firstOfNovember) + 60 * 60; // last sunday in october, 01 o'clock
+      if (unixtime <= _previousSunday) {
+        // indeed, it is daily savings time
+        return _hour + 2;
+      }
+    }
+  }
+  return _hour + 1; // germany is UTC+01:00
+}
+
 void loop() {
   Serial.print("Beginning to connect to network with SSID ");
   Serial.print(ssid);
@@ -100,7 +134,7 @@ void loop() {
   }
   digitalWrite(connectionLED, HIGH);
   Serial.println("Connected!");
-  
+
   int trycount = 0;
   boolean esc = false;
   while (!esc) {
@@ -125,7 +159,7 @@ void loop() {
     }
     http.end();
   }
-  
+
   Serial.print("Processing Data....");
   DeserializationError error = deserializeJson(weatherDoc, responseData, DeserializationOption::Filter(filter));
   if (error) {
@@ -136,7 +170,7 @@ void loop() {
   float wind = weatherDoc["current"]["wind_speed"];
   unsigned long unixtime = weatherDoc["current"]["dt"];
   int timeM = month(unixtime);
-  int timeH = hour(unixtime) + 2; // translate UTC to German time (+2 hours)
+  int timeH = hour(unixtime) + localHourTime(unixtime); // translate UTC to German time (+2 hours)
   int uppermax = 0;
   switch (timeM) { // dynamically change shutdown hour depending on month
     case 4: uppermax = 20; break;
@@ -158,7 +192,7 @@ void loop() {
   std::list<int> foreweatherids; // INFO: it's better to use a list here since at this scope it's impossible to gain the length of the combined foreweatherstates length for array declaration
   for (int i = 1; i <= forecastrange; i++) { // INFO: the loop starts with 1 due to hour 0 being the latest hour, which is not important in a forecast
     JsonArray foreweatherstates = foreweather[i]["weather"].as<JsonArray>(); // get the weather states of the hour as an array
-    for(JsonVariant obj : foreweatherstates) { 
+    for(JsonVariant obj : foreweatherstates) {
       foreweatherids.push_back(obj["id"].as<int>()); // save hourly states' id in list
     }
   }
@@ -185,7 +219,7 @@ void loop() {
     }
   }
   Serial.println("Done!");
-  
+
   int signalduration = 1000; // amount of milliseconds for the signal led
   // INFO: there are seperate if's in order to have the ability to write "Done!" before expressing info
   // red = time, blue = weather, green = wind, white = forecast
@@ -200,7 +234,7 @@ void loop() {
   Serial.print(" , Month: ");
   Serial.print(timeM);
   Serial.println(")");
-  
+
   if (goodWind) {
     Serial.print("Wind is optimal.");
   } else {
