@@ -5,7 +5,7 @@
 #include <TimeLib.h>
 #include <list>
 
-const char* ssid = "ErpixLAN";
+const char* ssid = "Erpix";
 const char* password = "***REMOVED***";
 
 const uint8_t powerLED = D4;
@@ -106,11 +106,11 @@ int localHourTime(unsigned long unixtime) {
       time_t _previousSunday = previousSunday(firstOfNovember) + 60 * 60; // last sunday in october, 01 o'clock
       if (unixtime <= _previousSunday) {
         // indeed, it is daily savings time
-        return _hour + 2;
+        return _hour + 1;
       }
     }
   }
-  return _hour + 1; // germany is UTC+01:00
+  return _hour; // the website already calculates the local time with the help of "timezone_offset", which is 7200 seconds (2 hours) later than UTC
 }
 
 void loop() {
