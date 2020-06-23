@@ -9,8 +9,8 @@ const char* ssid = "Erpix";
 const char* password = "***REMOVED***";
 
 const uint8_t powerLED = D4;
-const uint8_t connectionLED = D2;
-const uint8_t waterLED = D1;
+const uint8_t connectionLED = D1;
+const uint8_t waterLED = D2;
 const uint8_t errorLED = D5;
 const uint8_t bridge = D1;
 const uint8_t signalR = D8;
