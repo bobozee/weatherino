@@ -152,7 +152,7 @@ void loop() {
     if (trycount == 3) {
       errorHandler("Failed to establish connection to website.");
     }
-    Serial.print("Contacting Weather Website.... ");
+    Serial.print("Contacting Weather Website....");
     http.begin(client, "http://api.openweathermap.org/data/2.5/onecall?lat=51.603170&lon=6.917150&exclude=minutely,daily&appid=a02aeb3716cc0681332cb38fe5625bab");
     int httpCode = http.GET(); // fetch the GET code of the HTTP request, INFO: http.GET() is synchronous
     if (httpCode >= 200 && httpCode < 400) {
@@ -285,7 +285,12 @@ void loop() {
   } else {
     Serial.println("Outcome: Environment does not fit requirements. Pump is off.");
     digitalWrite(waterLED, LOW);
-    digitalWrite(bridge, LOW);
+    for (int i = 0; i > 3; i++) {
+      digitalWrite(bridge, HIGH);
+      delay(50);
+      digitalWrite(bridge, LOW);
+      delay(50);
+    }
   }
 
   Serial.println();
