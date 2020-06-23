@@ -81,7 +81,7 @@ void rgbBlink (boolean red, boolean green, boolean blue, int duration) {
 /**
  * Calculates local hour for WEST (Western europen time zone)
  * */
-int localHourTime(unsigned long unixtime) {
+int localHourTime(signed long unixtime) {
   int _month = month(unixtime);
   int _hour = hour(unixtime);
   if (_month >= 3 && _month <= 10) {
@@ -106,11 +106,21 @@ int localHourTime(unsigned long unixtime) {
       time_t _previousSunday = previousSunday(firstOfNovember) + 60 * 60; // last sunday in october, 01 o'clock
       if (unixtime <= _previousSunday) {
         // indeed, it is daily savings time
-        return _hour + 1;
+        _hour += 3; // time offset must be manually added (+ 2)
+        if (_hour >= 24) {
+          return _hour - 24;
+        } else {
+          return _hour;
+        }
       }
     }
   }
-  return _hour; // the website already calculates the local time with the help of "timezone_offset", which is 7200 seconds (2 hours) later than UTC
+  _hour += 2;
+  if (_hour >= 24) {
+    return _hour - 24;
+  } else {
+    return _hour;
+  }
 }
 
 void loop() {
@@ -201,10 +211,9 @@ void loop() {
   boolean goodWeather = false;
   boolean goodWind = false;
   boolean goodEstimate = false;
-  goodWeather = true;
   for (int id : currweatherids) {
     if (id <= 800) {
-      goodWeather = false;
+      goodWeather = true;
     }
   }
   if (timeM >= 4 && timeM <= 10 && timeH >= 8 && timeH < uppermax) {
@@ -213,10 +222,9 @@ void loop() {
   if (wind < 30) {
     goodWind = true;
   }
-  goodEstimate = true;
   for (int id : foreweatherids) {
     if (id <= 800) {
-      goodEstimate = false;
+      goodEstimate = true;
     }
   }
   Serial.println("Done!");
