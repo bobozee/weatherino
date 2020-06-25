@@ -9,7 +9,7 @@ const char* ssid = "Erpix";
 const char* password = "***REMOVED***";
 
 const uint8_t powerLED = D4;
-const uint8_t connectionLED = D1;
+const uint8_t connectionLED = D3;
 const uint8_t waterLED = D2;
 const uint8_t errorLED = D5;
 const uint8_t bridge = D1;
@@ -285,7 +285,7 @@ void loop() {
   } else {
     Serial.println("Outcome: Environment does not fit requirements. Pump is off.");
     digitalWrite(waterLED, LOW);
-    for (int i = 0; i > 3; i++) {
+    for (int i = 0; i < 3; i++) {
       digitalWrite(bridge, HIGH);
       delay(50);
       digitalWrite(bridge, LOW);
@@ -298,5 +298,5 @@ void loop() {
   digitalWrite(connectionLED, LOW);
   unsigned long timeoutTime = (60 - minute(unixtime)) * 60000;
   Serial.println("All done! Disconnecting and sleeping until the next hour. 'Till then!");
-  delay(timeoutTime + 5000);
+  delay(timeoutTime + 180000);
 }
