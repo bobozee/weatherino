@@ -285,10 +285,10 @@ void loop() {
   } else {
     Serial.println("Outcome: Environment does not fit requirements. Pump is off.");
     digitalWrite(waterLED, LOW);
-    for (int i = 0; i < 3; i++) {
-      digitalWrite(bridge, HIGH);
+    for (int i = 0; i < 2; i++) {
+      digitalWrite(waterLED, HIGH);
       delay(50);
-      digitalWrite(bridge, LOW);
+      digitalWrite(waterLED, LOW);
       delay(50);
     }
   }
