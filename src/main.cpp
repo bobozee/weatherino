@@ -263,6 +263,7 @@ void loop() {
   goodTime = checkTime(weatherDoc);
   goodWeather = checkWeather(weatherDoc);
   goodWind = checkWind(weatherDoc);
+  goodEstimate = checkForecast(weatherDoc);
 
   Serial.println("Done!");
 
@@ -298,7 +299,6 @@ void loop() {
     ledBlink(waterLED, 4, 250, true);
   }
 
-  Serial.println(")");
   if (goodEstimate) {
     Serial.print("Forecast is optimal.");
   } else {
@@ -306,7 +306,6 @@ void loop() {
     //rgbBlink(true, true, true, signalduration);
     ledBlink(waterLED, 5, 250, true);
   }
-
 
   if (goodTime && goodWeather && goodEstimate && goodWind) {
     Serial.println("Outcome: Environment fits requirements. Pump is on.");
