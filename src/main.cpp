@@ -14,12 +14,30 @@ const uint8_t signalR = D8;
 const uint8_t signalG = D7;
 const uint8_t signalB = D6;
 
+// INFO: due to a struct array not supporting conventional array methods (like size()),
+// having this variable is crucial later on
+const int amntOfNetworks = 2;
+
+// amount of hours to be forecasted, max = 48, 0 means last hour
+const int forecastrange = 2;
+
 WiFiClient client;
 HTTPClient http;
 String responseData;
 DynamicJsonDocument weatherDoc(15360);
 JsonArray reports;
 StaticJsonDocument<1024> filter;
+Network networks[amntOfNetworks];
+boolean goodTime = false;
+boolean goodWeather = true;
+boolean goodWind = false;
+boolean goodEstimate = true;
+unsigned long unixtime;
+
+struct Network {
+  String ssid;
+  String password;
+};
 
 void rgbBlink (boolean red, boolean green, boolean blue, int duration) {
   if (red) {
@@ -62,52 +80,13 @@ void errorHandler(String error) {
   ESP.reset();
 }
 
-/**
- * Calculates local hour for WEST (Western europen time zone)
- * */
-int localHourTime(signed long unixtime) {
-  int _month = month(unixtime);
-  int _hour = hour(unixtime);
-  if (_month >= 3 && _month <= 10) {
-    // most likely it is daily savings time, let's check the details
-
-    // make a time as 1 of April, this year
-    tmElements_t time;
-    time.Month = 4; // april
-    time.Day = 1;
-    time.Year = year(unixtime);
-    time.Hour = 0;
-    time.Minute = 0;
-    time.Second = 0;
-    time_t firstOfApril = makeTime(time);
-    time_t _previousSunday = previousSunday(firstOfApril) + 60 * 60; // last sunday in march at 01 o'clock
-
-    if (unixtime >= _previousSunday) {
-      //  ok, the last sunday in march , 01 o'clock has passed
-      time.Month = 11;  // November
-      time.Day = 1;
-      time_t firstOfNovember = makeTime(time);
-      time_t _previousSunday = previousSunday(firstOfNovember) + 60 * 60; // last sunday in october, 01 o'clock
-      if (unixtime <= _previousSunday) {
-        // indeed, it is daily savings time
-        _hour += 3; // time offset must be manually added (+ 2)
-        if (_hour >= 24) {
-          return _hour - 24;
-        } else {
-          return _hour;
-        }
-      }
-    }
-  }
-  _hour += 2;
-  if (_hour >= 24) {
-    return _hour - 24;
-  } else {
-    return _hour;
-  }
-}
-
 void setup() {
+
+  networks[0].ssid = "Erpix";
+  networks[0].password = "***REMOVED***";
+  networks[1].ssid = "ErpixLAN";
+  networks[1].password = "***REMOVED***";
+
   Serial.begin(115200);
   pinMode(powerLED, OUTPUT);
   pinMode(connectionLED, OUTPUT);
@@ -128,17 +107,72 @@ void setup() {
   digitalWrite(powerLED, HIGH);
 }
 
+boolean checkTime(DynamicJsonDocument weatherDoc) {
+  unsigned long timeOffset = weatherDoc["timezone_offset"];
+  unixtime = weatherDoc["current"]["dt"] + timeOffset;
+
+  int timeM = month(unixtime);
+  int timeH = hour(unixtime);
+  int uppermax = 0;
+  switch (timeM) { // dynamically change shutdown hour depending on month
+    case 4: uppermax = 20; break;
+    case 5: uppermax = 20; break;
+    case 6: uppermax = 21; break;
+    case 7: uppermax = 21; break;
+    case 8: uppermax = 21; break;
+    case 9: uppermax = 20; break;
+    case 10: uppermax = 20; break;
+  }
+
+  Serial.printf(" (Hour: %d, Month: %d)\n", timeH, timeM);
+
+  return timeM >= 4 && timeM <= 10 && timeH >= 8 && timeH < uppermax;
+}
+
+boolean checkWeather(DynamicJsonDocument weatherDoc) {
+
+  boolean _goodWeather = true;
+  JsonArray currweather = weatherDoc["current"]["weather"].as<JsonArray>(); // get the current weather states as an array
+
+  // INFO: the logic is reversed; while by default its true, if one bad weather is seen,
+  // the boolean is false. this is to increase priority of bad weather
+  Serial.print(" (Id's:");
+  for(JsonVariant obj : currweather) {
+    int id = obj["id"].as<int>();
+    Serial.printf(" %d", id);
+    _goodWeather &= (id < 800);
+  }
+  Serial.println(")");
+  return _goodWeather;
+}
+
+boolean checkForecast(DynamicJsonDocument weatherDoc) {
+
+  boolean _goodForecast = true;
+
+  // get the hourly combined weather reports as an array
+  JsonArray foreweather = weatherDoc["hourly"].as<JsonArray>();
+
+  Serial.print(" (Id's:");
+  for (int i = 1; i <= forecastrange; i++) { // INFO: the loop starts with 1 due to hour 0 being the latest hour, which is not important in a forecast
+    JsonArray foreweatherstates = foreweather[i]["weather"].as<JsonArray>(); // get the weather states of the hour as an array
+    for(JsonVariant obj : foreweatherstates) {
+      int id = obj["id"].as<int>();
+      _goodForecast &= (id < 800);
+      Serial.printf(" %d", id);
+    }
+  }
+  Serial.println(")");
+  return _goodForecast;
+}
+
+boolean checkWind(DynamicJsonDocument weatherDoc) {
+  float wind = weatherDoc["current"]["wind_speed"];
+  Serial.printf(" (Speed: %d)\n", wind);
+  return wind <= 2;
+}
+
 void loop() {
-  struct network {
-    String ssid;
-    String password;
-  };
-  const int amntOfNetworks = 2; //INFO: due to a struct array not supporting conventional array methods (like size()), having this variable is crucial later on
-  network networks[amntOfNetworks];
-  networks[0].ssid = "Erpix";
-  networks[0].password = "***REMOVED***";
-  networks[1].ssid = "ErpixLAN";
-  networks[1].password = "***REMOVED***";
   boolean succeeded = false;
   boolean esc = false;
   int tries = 0;
@@ -225,56 +259,11 @@ void loop() {
     errorMsg.concat(error.c_str());
     errorHandler(errorMsg);
   }
-  float wind = weatherDoc["current"]["wind_speed"];
-  unsigned long unixtime = weatherDoc["current"]["dt"];
-  int timeM = month(unixtime);
-  int timeH = localHourTime(unixtime); // local hour in germany preserving daily savings time
-  int uppermax = 0;
-  switch (timeM) { // dynamically change shutdown hour depending on month
-    case 4: uppermax = 20; break;
-    case 5: uppermax = 20; break;
-    case 6: uppermax = 21; break;
-    case 7: uppermax = 21; break;
-    case 8: uppermax = 21; break;
-    case 9: uppermax = 20; break;
-    case 10: uppermax = 20; break;
-  }
-  JsonArray currweather = weatherDoc["current"]["weather"].as<JsonArray>(); // get the current weather states as an array
-  int currweatherids[currweather.size()];
-  int index = 0; // INFO: the index is explicitly for the currweatherids array
-  for(JsonVariant obj : currweather) {
-    currweatherids[index] = obj["id"].as<int>(); // save states' id in array
-    index++;
-  }
-  int forecastrange = 2; // amount of hours to be forecasted, max = 48, 0 means last hour
-  JsonArray foreweather = weatherDoc["hourly"].as<JsonArray>(); // get the hourly combined weather reports as an array
-  std::list<int> foreweatherids; // INFO: it's better to use a list here since at this scope it's impossible to gain the length of the combined foreweatherstates length for array declaration
-  for (int i = 1; i <= forecastrange; i++) { // INFO: the loop starts with 1 due to hour 0 being the latest hour, which is not important in a forecast
-    JsonArray foreweatherstates = foreweather[i]["weather"].as<JsonArray>(); // get the weather states of the hour as an array
-    for(JsonVariant obj : foreweatherstates) {
-      foreweatherids.push_back(obj["id"].as<int>()); // save hourly states' id in list
-    }
-  }
-  boolean goodTime = false;
-  boolean goodWeather = true;
-  boolean goodWind = false;
-  boolean goodEstimate = true;
-  for (int id : currweatherids) {
-    if (id < 800) { // INFO: the logic is reversed; while by default its true, if one bad weather is seen, the boolean is false. this is to increase priority of bad weather
-      goodWeather = false;
-    }
-  }
-  if (timeM >= 4 && timeM <= 10 && timeH >= 8 && timeH < uppermax) {
-    goodTime = true;
-  }
-  if (wind < 30) {
-    goodWind = true;
-  }
-  for (int id : foreweatherids) {
-    if (id < 800) { // INFO: same logic as weather
-      goodEstimate = false;
-    }
-  }
+
+  goodTime = checkTime(weatherDoc);
+  goodWeather = checkWeather(weatherDoc);
+  goodWind = checkWind(weatherDoc);
+
   Serial.println("Done!");
 
   ledBlink(waterLED, 4, 50, true);
@@ -283,7 +272,7 @@ void loop() {
     2 / red   = time
     3 / green = wind
     4 / blue   = weather
-    5 / white = forecast 
+    5 / white = forecast
   */
   if (goodTime) {
     Serial.print("Time is optimal.");
@@ -292,11 +281,6 @@ void loop() {
     //rgbBlink(true, false, false, signalduration);
     ledBlink(waterLED, 2, 250, true);
   }
-  Serial.print(" (Hour: ");
-  Serial.print(timeH);
-  Serial.print(", Month: ");
-  Serial.print(timeM);
-  Serial.println(")");
 
   if (goodWind) {
     Serial.print("Wind is optimal.");
@@ -305,9 +289,6 @@ void loop() {
     //rgbBlink(true, true, false, signalduration);
     ledBlink(waterLED, 3, 250, true);
   }
-  Serial.print(" (Speed: ");
-  Serial.print(wind);
-  Serial.println(")");
 
   if (goodWeather) {
     Serial.print("Weather is optimal.");
@@ -316,11 +297,7 @@ void loop() {
     //rgbBlink(false, false, true, signalduration);
     ledBlink(waterLED, 4, 250, true);
   }
-  Serial.print(" (Id's:");
-  for (int id : currweatherids) {
-    Serial.print(" ");
-    Serial.print(id);
-  }
+
   Serial.println(")");
   if (goodEstimate) {
     Serial.print("Forecast is optimal.");
@@ -329,12 +306,7 @@ void loop() {
     //rgbBlink(true, true, true, signalduration);
     ledBlink(waterLED, 5, 250, true);
   }
-  Serial.print(" (Id's:");
-  for (int id : foreweatherids) {
-    Serial.print(" ");
-    Serial.print(id);
-  }
-  Serial.println(")");
+
 
   if (goodTime && goodWeather && goodEstimate && goodWind) {
     Serial.println("Outcome: Environment fits requirements. Pump is on.");
