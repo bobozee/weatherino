@@ -230,7 +230,6 @@ void loop() {
   goodTime = checkTime(weatherDoc);
   goodWeather = checkWeather(weatherDoc);
   goodWind = checkWind(weatherDoc);
-  goodEstimate = checkForecast(weatherDoc);
 
 =======
   float wind = weatherDoc["current"]["wind_speed"];
@@ -327,6 +326,7 @@ void loop() {
   }
 <<<<<<< HEAD
 
+<<<<<<< HEAD
 =======
   Serial.print(" (Id's:");
   for (int id : currweatherids) {
@@ -335,6 +335,9 @@ void loop() {
   }
   Serial.println(")");
 >>>>>>> parent of 7239ee3... fix(project): source code optimization
+=======
+  Serial.println(")");
+>>>>>>> parent of 8e17fc4... fix(project): source code optimization
   if (goodEstimate) {
     Serial.print("Forecast is optimal.");
   } else {
@@ -351,6 +354,7 @@ void loop() {
   }
   Serial.println(")");
 >>>>>>> parent of 7239ee3... fix(project): source code optimization
+
 
   if (goodTime && goodWeather && goodEstimate && goodWind) {
     Serial.println("Outcome: Environment fits requirements. Pump is on.");
