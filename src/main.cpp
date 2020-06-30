@@ -225,13 +225,7 @@ void loop() {
     errorMsg.concat(error.c_str());
     errorHandler(errorMsg);
   }
-<<<<<<< HEAD
 
-  goodTime = checkTime(weatherDoc);
-  goodWeather = checkWeather(weatherDoc);
-  goodWind = checkWind(weatherDoc);
-
-=======
   float wind = weatherDoc["current"]["wind_speed"];
   unsigned long unixtime = weatherDoc["current"]["dt"];
   int timeM = month(unixtime);
@@ -274,7 +268,7 @@ void loop() {
   if (timeM >= 4 && timeM <= 10 && timeH >= 8 && timeH < uppermax) {
     goodTime = true;
   }
-  if (wind < 30) {
+  if (wind <= 2) {
     goodWind = true;
   }
   for (int id : foreweatherids) {
@@ -282,7 +276,6 @@ void loop() {
       goodEstimate = false;
     }
   }
->>>>>>> parent of 7239ee3... fix(project): source code optimization
   Serial.println("Done!");
 
   ledBlink(waterLED, 4, 50, true);
@@ -324,20 +317,14 @@ void loop() {
     //rgbBlink(false, false, true, signalduration);
     ledBlink(waterLED, 4, 250, true);
   }
-<<<<<<< HEAD
 
-<<<<<<< HEAD
-=======
   Serial.print(" (Id's:");
   for (int id : currweatherids) {
     Serial.print(" ");
     Serial.print(id);
   }
   Serial.println(")");
->>>>>>> parent of 7239ee3... fix(project): source code optimization
-=======
-  Serial.println(")");
->>>>>>> parent of 8e17fc4... fix(project): source code optimization
+
   if (goodEstimate) {
     Serial.print("Forecast is optimal.");
   } else {
@@ -345,16 +332,13 @@ void loop() {
     //rgbBlink(true, true, true, signalduration);
     ledBlink(waterLED, 5, 250, true);
   }
-<<<<<<< HEAD
-=======
+
   Serial.print(" (Id's:");
   for (int id : foreweatherids) {
     Serial.print(" ");
     Serial.print(id);
   }
   Serial.println(")");
->>>>>>> parent of 7239ee3... fix(project): source code optimization
-
 
   if (goodTime && goodWeather && goodEstimate && goodWind) {
     Serial.println("Outcome: Environment fits requirements. Pump is on.");
