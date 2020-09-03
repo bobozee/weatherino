@@ -21,6 +21,9 @@ DynamicJsonDocument weatherDoc(15360);
 JsonArray reports;
 StaticJsonDocument<1024> filter;
 
+const char* ssid = "Erpix";
+const char* password = "***REMOVED***";
+
 void rgbBlink (boolean red, boolean green, boolean blue, int duration) {
   if (red) {
     digitalWrite(signalR, HIGH);
@@ -129,64 +132,41 @@ void setup() {
 }
 
 void loop() {
-  struct network {
-    String ssid;
-    String password;
-  };
-  const int amntOfNetworks = 2; //INFO: due to a struct array not supporting conventional array methods (like size()), having this variable is crucial later on
-  network networks[amntOfNetworks];
-  networks[0].ssid = "Erpix";
-  networks[0].password = "***REMOVED***";
-  networks[1].ssid = "ErpixLAN";
-  networks[1].password = "***REMOVED***";
-  boolean succeeded = false;
-  boolean esc = false;
   int tries = 0;
-  while (!succeeded) {
-    Serial.print("Beginning to connect to network with SSID ");
-    Serial.print(networks[tries].ssid);
-    Serial.print(" and password ");
-    Serial.println(networks[tries].password);
-    Serial.print("Connecting....");
-    WiFi.begin(networks[tries].ssid, networks[tries].password);
-    const int rate = 250; // rate of blinking for the connection led
-    const int threshold = 20; // amount of time to pass for timeout of connection attempt
-    int counter = 0;
-    esc = false;
-    while (WiFi.status() != WL_CONNECTED && !esc) {
-      digitalWrite(connectionLED, HIGH);
-      delay(rate);
-      digitalWrite(connectionLED, LOW);
-      delay(rate);
-      counter++;
-      if (counter == threshold) {
-        tries++;
-        if (tries == amntOfNetworks) {
-          errorHandler("Timeout");
-        } else {
-          Serial.println("Timeout, attempting next network.");
-          digitalWrite(errorLED, HIGH);
-          delay(500);
-          digitalWrite(errorLED, LOW);
-          esc = true;
-        }
+  Serial.print("Beginning to connect to network with SSID ");
+  Serial.print(ssid);
+  Serial.print(" and password ");
+  Serial.println(password);
+  Serial.print("Connecting....");
+  WiFi.begin(ssid, password);
+  const int rate = 250; // rate of blinking for the connection led
+  const int threshold = 20; // amount of time to pass for timeout of connection attempt
+  int counter = 0;
+  while (WiFi.status() != WL_CONNECTED) {
+    digitalWrite(connectionLED, HIGH);
+    delay(rate);
+    digitalWrite(connectionLED, LOW);
+    delay(rate);
+    counter++;
+    if (counter == threshold) {
+      tries++;
+      counter = 0;
+      if (tries == 3) {
+        errorHandler("Timeout");
       }
-    }
-    if (esc == false) { // if the loop wasnt thrown out due to a timeout
-      succeeded = true;
     }
   }
   digitalWrite(connectionLED, HIGH);
   Serial.println("Connected!");
 
-  int trycount = 0;
-  esc = false;
+  boolean esc = false;
+  tries = 0;
   while (!esc) {
-    if (trycount == 3) {
+    if (tries == 3) {
       errorHandler("Failed to establish connection to website.");
     }
     Serial.print("Contacting Weather Website....");
-    http.begin(client, "http://api.openweathermap.org/data/2.5/onecall?lat=51.603170&lon=6.917150&exclude=minutely,daily&appid=a02aeb3716cc0681332cb38fe5625bab");
+    http.begin(client, "api.openweathermap.org/data/2.5/weather?q=Kirchhellen,de&appid=a02aeb3716cc0681332cb38fe5625bab");
     int httpCode = http.GET(); // fetch the GET code of the HTTP request, INFO: http.GET() is synchronous
     if (httpCode == 302) { //INFO: 302 occurs usually when the chip itself is denied internet access and is thus moved to the router's internet blockage website
         Serial.print("Failed! (");
@@ -195,7 +175,7 @@ void loop() {
         digitalWrite(errorLED, HIGH);
         delay(500);
         digitalWrite(errorLED, LOW);
-        trycount++;
+        tries++;
     } else {
       if (httpCode >= 200 && httpCode < 400) {
         responseData = http.getString(); // if the code is good, get the fetchable data
@@ -212,7 +192,7 @@ void loop() {
         digitalWrite(errorLED, HIGH);
         delay(500);
         digitalWrite(errorLED, LOW);
-        trycount++;
+        tries++;
       }
     }
     http.end();
@@ -226,8 +206,8 @@ void loop() {
     errorHandler(errorMsg);
   }
 
-  float wind = weatherDoc["current"]["wind_speed"];
-  unsigned long unixtime = weatherDoc["current"]["dt"];
+  float wind = weatherDoc["wind"]["speed"];
+  unsigned long unixtime = weatherDoc["dt"];
   int timeM = month(unixtime);
   int timeH = localHourTime(unixtime); // local hour in germany preserving daily savings time
   int uppermax = 0;
@@ -240,27 +220,17 @@ void loop() {
     case 9: uppermax = 20; break;
     case 10: uppermax = 20; break;
   }
-  JsonArray currweather = weatherDoc["current"]["weather"].as<JsonArray>(); // get the current weather states as an array
-  int currweatherids[currweather.size()];
+  JsonArray weather = weatherDoc["weather"].as<JsonArray>(); // get the current weather states as an array
+  int weatherids[weather.size()];
   int index = 0; // INFO: the index is explicitly for the currweatherids array
-  for(JsonVariant obj : currweather) {
-    currweatherids[index] = obj["id"].as<int>(); // save states' id in array
+  for(JsonVariant obj : weather) {
+    weatherids[index] = obj["id"].as<int>(); // save states' id in array
     index++;
-  }
-  int forecastrange = 2; // amount of hours to be forecasted, max = 48, 0 means last hour
-  JsonArray foreweather = weatherDoc["hourly"].as<JsonArray>(); // get the hourly combined weather reports as an array
-  std::list<int> foreweatherids; // INFO: it's better to use a list here since at this scope it's impossible to gain the length of the combined foreweatherstates length for array declaration
-  for (int i = 1; i <= forecastrange; i++) { // INFO: the loop starts with 1 due to hour 0 being the latest hour, which is not important in a forecast
-    JsonArray foreweatherstates = foreweather[i]["weather"].as<JsonArray>(); // get the weather states of the hour as an array
-    for(JsonVariant obj : foreweatherstates) {
-      foreweatherids.push_back(obj["id"].as<int>()); // save hourly states' id in list
-    }
   }
   boolean goodTime = false;
   boolean goodWeather = true;
   boolean goodWind = false;
-  boolean goodEstimate = true;
-  for (int id : currweatherids) {
+  for (int id : weatherids) {
     if (id < 800) { // INFO: the logic is reversed; while by default its true, if one bad weather is seen, the boolean is false. this is to increase priority of bad weather
       goodWeather = false;
     }
@@ -270,11 +240,6 @@ void loop() {
   }
   if (wind <= 2) {
     goodWind = true;
-  }
-  for (int id : foreweatherids) {
-    if (id < 800) { // INFO: same logic as weather
-      goodEstimate = false;
-    }
   }
   Serial.println("Done!");
 
@@ -319,28 +284,13 @@ void loop() {
   }
 
   Serial.print(" (Id's:");
-  for (int id : currweatherids) {
+  for (int id : weatherids) {
     Serial.print(" ");
     Serial.print(id);
   }
   Serial.println(")");
 
-  if (goodEstimate) {
-    Serial.print("Forecast is optimal.");
-  } else {
-    Serial.print("Forecast isn't optimal.");
-    //rgbBlink(true, true, true, signalduration);
-    ledBlink(waterLED, 5, 250, true);
-  }
-
-  Serial.print(" (Id's:");
-  for (int id : foreweatherids) {
-    Serial.print(" ");
-    Serial.print(id);
-  }
-  Serial.println(")");
-
-  if (goodTime && goodWeather && goodEstimate && goodWind) {
+  if (goodTime && goodWeather && goodWind) {
     Serial.println("Outcome: Environment fits requirements. Pump is on.");
     digitalWrite(waterLED, HIGH);
     digitalWrite(bridge, HIGH);
