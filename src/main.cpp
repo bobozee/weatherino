@@ -19,7 +19,6 @@ HTTPClient http;
 String responseData;
 DynamicJsonDocument weatherDoc(15360);
 JsonArray reports;
-StaticJsonDocument<1024> filter;
 
 const char* ssid = "Erpix";
 const char* password = "***REMOVED***";
@@ -120,10 +119,6 @@ void setup() {
   pinMode(signalR, OUTPUT);
   pinMode(signalG, OUTPUT);
   pinMode(signalB, OUTPUT);
-  filter["current"]["dt"] = true;
-  filter["current"]["wind_speed"] = true;
-  filter["current"]["weather"] = true;
-  filter["hourly"][0]["weather"] = true;
   delay(250);
   Serial.println();
   Serial.println("Startup complete.");
@@ -166,7 +161,7 @@ void loop() {
       errorHandler("Failed to establish connection to website.");
     }
     Serial.print("Contacting Weather Website....");
-    http.begin(client, "api.openweathermap.org/data/2.5/weather?q=Kirchhellen,de&appid=a02aeb3716cc0681332cb38fe5625bab");
+    http.begin(client, "***REMOVED***");
     int httpCode = http.GET(); // fetch the GET code of the HTTP request, INFO: http.GET() is synchronous
     if (httpCode == 302) { //INFO: 302 occurs usually when the chip itself is denied internet access and is thus moved to the router's internet blockage website
         Serial.print("Failed! (");
@@ -175,6 +170,7 @@ void loop() {
         digitalWrite(errorLED, HIGH);
         delay(500);
         digitalWrite(errorLED, LOW);
+        delay(500);
         tries++;
     } else {
       if (httpCode >= 200 && httpCode < 400) {
@@ -192,6 +188,7 @@ void loop() {
         digitalWrite(errorLED, HIGH);
         delay(500);
         digitalWrite(errorLED, LOW);
+        delay(500);
         tries++;
       }
     }
@@ -199,7 +196,7 @@ void loop() {
   }
 
   Serial.print("Processing Data....");
-  DeserializationError error = deserializeJson(weatherDoc, responseData, DeserializationOption::Filter(filter));
+  DeserializationError error = deserializeJson(weatherDoc, responseData);
   if (error) {
     String errorMsg("Parsing Error: ");
     errorMsg.concat(error.c_str());
