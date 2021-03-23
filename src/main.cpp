@@ -21,7 +21,7 @@ DynamicJsonDocument weatherDoc(15360);
 JsonArray reports;
 
 const char* ssid = "Erpix";
-const char* password = "***REMOVED***";
+const char* password = "lolno";
 
 void rgbBlink (boolean red, boolean green, boolean blue, int duration) {
   if (red) {
