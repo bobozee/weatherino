@@ -161,7 +161,7 @@ void loop() {
       errorHandler("Failed to establish connection to website.");
     }
     Serial.print("Contacting Weather Website....");
-    http.begin(client, "***REMOVED***");
+    http.begin(client, "norhere");
     int httpCode = http.GET(); // fetch the GET code of the HTTP request, INFO: http.GET() is synchronous
     if (httpCode == 302) { //INFO: 302 occurs usually when the chip itself is denied internet access and is thus moved to the router's internet blockage website
         Serial.print("Failed! (");
